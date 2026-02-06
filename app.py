@@ -1,5 +1,5 @@
-"""Minimal Literature Review Assistant
-Only features: local search, article selection, and AI summarization.
+"""Literature Review Assistant
+features: local search, query expansion.
 """
 
 import streamlit as st
@@ -76,6 +76,14 @@ class LocalBibliography:
             score = 0
             title = a.get('title', '').lower()
             abstract = a.get('abstract', '').lower()
+            authors = ' '.join(a.get('authors', [])).lower()
+            
+            # Apply year filter
+            year = a.get('year')
+            if year_start and year and year < year_start:
+                continue
+            if year_end and year and year > year_end:
+                continue
             
             # Score each token
             for token in tokens:
@@ -84,6 +92,8 @@ class LocalBibliography:
                         score += 10
                     if token in abstract:
                         score += 5
+                    if token in authors:
+                        score += 3
             
             if score > 0:
                 results.append((score, a))
@@ -100,20 +110,6 @@ class GeminiAI:
     def __init__(self, api_key: str):
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-2.5-flash')
-
-    def summarize_article(self, title: str, abstract: str) -> str:
-        prompt = f"""Summarize the following research article in 2-3 sentences, focusing on the main contribution and findings:
-
-Title: {title}
-
-Abstract: {abstract}
-
-Provide a clear, concise summary suitable for a literature review."""
-        try:
-            resp = self.model.generate_content(prompt)
-            return getattr(resp, 'text', str(resp))
-        except Exception as e:
-            return f"Error generating summary: {e}"
     
     def expand_query(self, query: str) -> str:
         """Expand a search query with related keywords and synonyms."""
@@ -184,7 +180,6 @@ def search_page():
                 expanded = ai.expand_query(query)
                 st.session_state.last_query = query
                 st.session_state.last_expanded_query = expanded
-                st.info(f"Original query: **{query}**\n\nExpanded query: **{expanded}**")
                 results = LocalBibliography.search_papers(query=expanded, limit=num, year_start=year_start or None, year_end=year_end or None)
                 st.session_state.search_results = results
         else:
@@ -202,45 +197,8 @@ def search_page():
         st.subheader(f"Found {len(st.session_state.search_results)} papers")
         for i, a in enumerate(st.session_state.search_results):
             display_article_card(a, i)
-
-
-def selected_articles_page():
-    st.header('Selected Articles')
-    if not st.session_state.selected_articles:
-        st.info('No articles selected yet.')
-        return
-    for i, (pid, a) in enumerate(st.session_state.selected_articles.items()):
-        display_article_card(a, i)
-
-
-def ai_assistant_page():
-    st.header('AI Summarize')
-    if not st.session_state.gemini_api_key:
-        st.session_state.gemini_api_key = st.text_input(
-            'Gemini API Key',
-            value=st.session_state.gemini_api_key,
-            type='password',
-            help='Your key is stored only in session memory'
-        )
-    if not st.session_state.gemini_api_key:
-        st.warning('Provide Gemini API key to use summarization')
-        return
-
-    ai = GeminiAI(st.session_state.gemini_api_key)
-    articles = list(st.session_state.selected_articles.values())
-    if not articles:
-        st.info('Select an article to summarize from Search results')
-        return
-
-    titles = {a.get('paperId'): a.get('title') for a in articles}
-    selected = st.selectbox('Select article', options=list(titles.keys()), format_func=lambda k: titles[k])
-    if st.button('Generate Summary'):
-        art = st.session_state.selected_articles[selected]
-        with st.spinner('Generating summary...'):
-            summary = ai.summarize_article(art.get('title', ''), art.get('abstract', ''))
-            st.markdown('### Summary')
-            st.markdown(f"<div class=\"ai-response\">{summary}</div>", unsafe_allow_html=True)
-
+    elif st.session_state.last_query:
+        st.warning("❌ No results found for your search. Try different keywords or use AI query expansion.")
 
 
 def main():
