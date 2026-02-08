@@ -128,6 +128,10 @@ Expanded query:"""
         try:
             resp = self.model.generate_content(prompt)
             text = getattr(resp, 'text', str(resp)).strip()
+            if len(text.split(",")) > query_num:
+                for term in text.split(",")[:query_num]:
+                    text_verify = term.strip()
+                return text_verify
             return text
         except Exception as e:
             return str(e)
