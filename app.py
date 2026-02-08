@@ -111,7 +111,7 @@ class GeminiAI:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-2.5-flash')
     
-    def expand_query(self, query: str) -> str:
+    def expand_query(self, query: str, query_num: int = 10) -> str:
         """Expand a search query with related keywords and synonyms."""
         prompt = f"""Given the search query: "{query}"
 
@@ -120,7 +120,7 @@ Generate an expanded search query that includes:
 2. Broader concepts
 3. Specific techniques or methods related to the topic
 
-Return only the expanded query as a single line of comma-separated terms, no explanations.
+Return only the {query_num} most relevant terms as a single line of comma-separated terms, no explanations.
 
 Example: if input is "machine learning", output might be: "machine learning, deep learning, artificial intelligence, neural networks, supervised learning, classification"
 
@@ -165,6 +165,7 @@ def search_page():
     with st.form('search'):
         query = st.text_input('Search query')
         num = st.slider('Max results', 5, 100, 20)
+        query_num = st.slider('Number of terms for AI expansion', 1, 20, 5)
         year_start = st.number_input('From year', value=0)
         year_end = st.number_input('To year', value=9999)
         col1, col2 = st.columns(2)
@@ -177,7 +178,7 @@ def search_page():
         if st.session_state.gemini_api_key:
             ai = GeminiAI(st.session_state.gemini_api_key)
             with st.spinner('Expanding query with AI...'):
-                expanded = ai.expand_query(query)
+                expanded = ai.expand_query(query, query_num=query_num)
                 st.session_state.last_query = query
                 st.session_state.last_expanded_query = expanded
                 results = LocalBibliography.search_papers(query=expanded, limit=num, year_start=year_start or None, year_end=year_end or None)
